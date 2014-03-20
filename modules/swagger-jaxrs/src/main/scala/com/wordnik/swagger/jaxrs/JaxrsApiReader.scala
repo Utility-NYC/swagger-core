@@ -305,7 +305,7 @@ trait JaxrsApiReader extends ClassReader with ClassReaderUtils {
       // sort them by min position in the operations
       val s = (for(op <- operations) yield {
         (op, op._3.map(_.position).toList.min)
-      }).sortWith(_._2 < _._2).toList
+      }).sortWith(_._1._1 < _._1._1).sortWith(_._2 < _._2).toList
       val orderedOperations = new ListBuffer[Tuple3[String, String, ListBuffer[Operation]]]
       s.foreach(op => {
         val ops = op._1._3.sortWith(_.position < _.position)
