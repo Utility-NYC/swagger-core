@@ -9,13 +9,25 @@
   <artifactId>swagger-project_2.10</artifactId>
   <packaging>pom</packaging>
   <name>wordnik-swagger-project</name>
-  <version>1.3.2</version>
+  <version>1.3.2-JUNBO</version>
   <url>https://github.com/wordnik/swagger-core</url>
   <scm>
     <connection>scm:git:git@github.com:wordnik/swagger-core.git</connection>
     <developerConnection>scm:git:git@github.com:wordnik/swagger-core.git</developerConnection>
     <url>https://github.com/wordnik/swagger-core</url>
   </scm>
+  <distributionManagement>
+    <repository>
+      <id>junbo-snapshots</id>
+      <name>Junbo Snapshots</name>
+      <url>https://aws-artifactory:8443/artifactory/ext-snapshot-local</url>
+    </repository>
+    <snapshotRepository>
+      <id>junbo-snapshots</id>
+      <name>Junbo Snapshots</name>
+      <url>https://aws-artifactory:8443/artifactory/ext-snapshot-local</url>
+    </snapshotRepository>
+  </distributionManagement>
   <prerequisites>
     <maven>2.2.0</maven>
   </prerequisites>
