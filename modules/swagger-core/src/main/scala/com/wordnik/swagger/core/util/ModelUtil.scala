@@ -23,6 +23,7 @@ import com.wordnik.swagger.core.{ SwaggerContext, SwaggerSpec, SwaggerTypes }
 import org.slf4j.LoggerFactory
 
 import scala.collection.mutable.{ ListBuffer, HashMap, HashSet }
+import com.wordnik.swagger.reader.ModelReaders
 
 object ModelUtil {
   private val LOGGER = LoggerFactory.getLogger(ModelUtil.getClass)
@@ -109,12 +110,17 @@ object ModelUtil {
       case _ => name
     }
     if(shoudIncludeModel(typeRef)) {
-      try{
-        val cls = SwaggerContext.loadClass(typeRef)
-        (for(model <- ModelConverters.readAll(cls)) yield (model.name, model)).toMap
-      }
-      catch {
-        case e: ClassNotFoundException => Map()
+      ModelReaders.reader.read(typeRef) match {
+        case None => {
+          try {
+            val cls = SwaggerContext.loadClass(typeRef)
+            (for(model <- ModelConverters.readAll(cls)) yield (model.name, model)).toMap
+          }
+          catch {
+            case e: ClassNotFoundException => Map()
+          }
+        }
+        case Some(models) => models
       }
     }
     else Map()

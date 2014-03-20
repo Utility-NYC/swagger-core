@@ -26,6 +26,11 @@ trait JaxrsApiReader extends ClassReader with ClassReaderUtils {
   // decorates a Parameter based on annotations, returns None if param should be ignored
   def processParamAnnotations(mutable: MutableParameter, paramAnnotations: Array[Annotation]): Option[Parameter]
 
+  // decorates an Operation
+  def processOperation(operation: Operation, method: Method, apiOperation: ApiOperation) : Operation = {
+    return operation;
+  }
+
   // Finds the type of the subresource this method produces, in case it's a subresource locator
   // In case it's not a subresource locator the entity type is returned
   def findSubresourceType(method: Method): Class[_]
@@ -201,7 +206,8 @@ trait JaxrsApiReader extends ClassReader with ClassReaderUtils {
     }
     val isDeprecated = Option(method.getAnnotation(classOf[Deprecated])).map(m => "true").getOrElse(null)
 
-    parseOperation(method, apiOperation, apiResponses, isDeprecated, parentParams, parentMethods)
+    val operation = parseOperation(method, apiOperation, apiResponses, isDeprecated, parentParams, parentMethods)
+    processOperation(operation, method, apiOperation)
   }
 
   def appendOperation(endpoint: String, path: String, op: Operation, operations: ListBuffer[Tuple3[String, String, ListBuffer[Operation]]]) = {
@@ -280,10 +286,10 @@ trait JaxrsApiReader extends ClassReader with ClassReaderUtils {
           case e: Path => e.value()
           case _ => ""
         }
-        val endpoint = (parentPath + /*api.value + */ pathFromMethod(method)).replace("//", "/")
+        val endpoint = (parentPath + api.basePath + pathFromMethod(method)).replace("//", "/")
         Option(returnType.getAnnotation(classOf[Api])) match {
           case Some(e) => {
-            val root = docRoot + api.value + pathFromMethod(method)
+            val root = docRoot + api.basePath + pathFromMethod(method)
             parentMethods += method
             readRecursive(root, endpoint, returnType, config, operations, parentMethods)
             parentMethods -= method

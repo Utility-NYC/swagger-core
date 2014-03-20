@@ -16,6 +16,7 @@ import java.lang.annotation.Annotation
 import javax.xml.bind.annotation._
 
 import scala.collection.mutable.{ LinkedHashMap, ListBuffer, HashSet, HashMap }
+import com.wordnik.swagger.reader.{PropertyMetaInfo, ModelReaders}
 
 class ModelPropertyParser(cls: Class[_], t: Map[String, String] = Map.empty) (implicit properties: LinkedHashMap[String, ModelProperty]) {
   private val LOGGER = LoggerFactory.getLogger(classOf[ModelPropertyParser])
@@ -52,15 +53,19 @@ class ModelPropertyParser(cls: Class[_], t: Map[String, String] = Map.empty) (im
 
   def parseField(field: Field) = {
     LOGGER.debug("processing field " + field)
-    val returnClass = field.getDeclaringClass
-    parsePropertyAnnotations(returnClass, field.getName, field.getAnnotations, field.getGenericType, field.getType)
+
+    val propertyMetaInfo = new PropertyMetaInfo(field.getDeclaringClass, field.getName, field.getAnnotations, field.getGenericType, field.getType)
+    val newMetaInfo = ModelReaders.reader.parseField(field, propertyMetaInfo)
+    parsePropertyAnnotations(newMetaInfo)
   }
 
   def parseMethod(method: Method) = {
     if (method.getParameterTypes == null || method.getParameterTypes.length == 0) {
       LOGGER.debug("processing method " + method)
-      val returnClass = method.getReturnType
-      parsePropertyAnnotations(returnClass, method.getName, method.getAnnotations, method.getGenericReturnType, method.getReturnType)
+
+      val propertyMetaInfo = new PropertyMetaInfo(method.getReturnType, method.getName, method.getAnnotations, method.getGenericReturnType, method.getReturnType)
+      val newMetaInfo = ModelReaders.reader.parseMethod(method, propertyMetaInfo)
+      parsePropertyAnnotations(newMetaInfo)
     }
   }
 
@@ -78,6 +83,12 @@ class ModelPropertyParser(cls: Class[_], t: Map[String, String] = Map.empty) (im
     }
   }
 
+  def parsePropertyAnnotations(metaInfo : PropertyMetaInfo): Any = {
+    if (metaInfo != null) {
+      parsePropertyAnnotations(metaInfo.returnClass, metaInfo.propertyName, metaInfo.propertyAnnotations, metaInfo.genericReturnType, metaInfo.returnType)
+    }
+  }
+
   def parsePropertyAnnotations(returnClass: Class[_], propertyName: String, propertyAnnotations: Array[Annotation], genericReturnType: Type, returnType: Type): Any = {
     val e = extractGetterProperty(propertyName)
     var originalName = e._1
@@ -89,7 +100,6 @@ class ModelPropertyParser(cls: Class[_], t: Map[String, String] = Map.empty) (im
 
     var processedAnnotations = processAnnotations(originalName, propertyAnnotations)
     var name = processedAnnotations("name").asInstanceOf[String]
-    if (name == null) name = originalName
 
     var required = processedAnnotations("required").asInstanceOf[Boolean]
     var position = processedAnnotations("position").asInstanceOf[Int]
@@ -110,10 +120,14 @@ class ModelPropertyParser(cls: Class[_], t: Map[String, String] = Map.empty) (im
     }
 
     try {
-      val fieldAnnotations = getDeclaredField(this.cls, name).getAnnotations()
-      var propAnnoOutput = processAnnotations(name, fieldAnnotations)
+      val fieldAnnotations = getDeclaredField(this.cls, originalName).getAnnotations()
+
+      var propAnnoOutput = processAnnotations(originalName, fieldAnnotations)
       var propPosition = propAnnoOutput("position").asInstanceOf[Int]
 
+      if (name == null || name.equals(originalName)) {
+        name = propAnnoOutput("name").asInstanceOf[String]
+      }
       if(allowableValues == None) 
         allowableValues = propAnnoOutput("allowableValues").asInstanceOf[Option[AllowableValues]]
       if(description == None && propAnnoOutput.contains("description") && propAnnoOutput("description") != null) 
@@ -130,6 +144,8 @@ class ModelPropertyParser(cls: Class[_], t: Map[String, String] = Map.empty) (im
         // isTransient = false
       }
     }
+
+    if (name == null) name = originalName
 
     //if class has accessor none annotation, the method/field should have explicit xml element annotations, if not
     // consider it as transient
