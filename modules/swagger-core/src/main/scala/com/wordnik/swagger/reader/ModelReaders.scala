@@ -3,24 +3,23 @@ package com.wordnik.swagger.reader
 import com.wordnik.swagger.model._
 import java.lang.reflect.{Type, Field, Method}
 import java.lang.annotation.Annotation
+import com.wordnik.swagger.core.util.ClassWrapper
 
 case class PropertyMetaInfo(
-  returnClass: Class[_],
+  returnClass: ClassWrapper,
   propertyName: String,
-  propertyAnnotations: Array[Annotation],
-  genericReturnType: Type,
-  returnType: Type)
+  propertyAnnotations: Array[Annotation])
 
 trait ModelReader {
   def read(modelType : String) : Option[Map[String, Model]]
-  def parseMethod(method : Method, metaInfo : PropertyMetaInfo) : PropertyMetaInfo
-  def parseField(field : Field, metaInfo : PropertyMetaInfo) : PropertyMetaInfo
+  def parseMethod(cls: ClassWrapper, method : Method, metaInfo : PropertyMetaInfo) : PropertyMetaInfo
+  def parseField(cls: ClassWrapper, field : Field, metaInfo : PropertyMetaInfo) : PropertyMetaInfo
 }
 
 class DefaultModelReader extends ModelReader {
   def read(modelType : String) : Option[Map[String, Model]] = None
-  def parseMethod(method : Method, metaInfo : PropertyMetaInfo) : PropertyMetaInfo = metaInfo
-  def parseField(field : Field, metaInfo : PropertyMetaInfo) : PropertyMetaInfo = metaInfo
+  def parseMethod(cls: ClassWrapper, method : Method, metaInfo : PropertyMetaInfo) : PropertyMetaInfo = metaInfo
+  def parseField(cls: ClassWrapper, field : Field, metaInfo : PropertyMetaInfo) : PropertyMetaInfo = metaInfo
 }
 
 object ModelReaders {

@@ -113,9 +113,9 @@ object SwaggerSerializers extends Serializers {
       case "date"      => (name -> "string")  ~ ("format" -> "date")
       case "date-time" => (name -> "string")  ~ ("format" -> "date-time")
       case _           => {
-        val ComplexTypeMatcher = "([a-zA-Z]*)\\[([a-zA-Z\\.\\-]*)\\].*".r
+        val ContainerMatcher = "(List|Array|Set)\\[(.*)\\].*?".r
         `type` match {
-          case ComplexTypeMatcher(container, value) => 
+          case ContainerMatcher(container, value) =>
             toJsonSchemaContainer(container) ~ {
               ("items" -> {if(isSimpleType(value))
                   toJsonSchema("type", value)

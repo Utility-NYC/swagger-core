@@ -2,7 +2,7 @@ package com.wordnik.swagger.converter
 
 import com.wordnik.swagger.model._
 import com.wordnik.swagger.core.{ SwaggerSpec, SwaggerTypes }
-import com.wordnik.swagger.core.util.TypeUtil
+import com.wordnik.swagger.core.util.{ClassWrapper, TypeUtil}
 import com.wordnik.swagger.annotations.ApiModelProperty
 
 import com.fasterxml.jackson.annotation.{JsonIgnore, JsonProperty}
@@ -18,7 +18,7 @@ import javax.xml.bind.annotation._
 import scala.collection.mutable.{ LinkedHashMap, ListBuffer, HashSet, HashMap }
 import com.wordnik.swagger.reader.{PropertyMetaInfo, ModelReaders}
 
-class ModelPropertyParser(cls: Class[_], t: Map[String, String] = Map.empty) (implicit properties: LinkedHashMap[String, ModelProperty]) {
+class ModelPropertyParser(cls: ClassWrapper, t: Map[String, String] = Map.empty) (implicit properties: LinkedHashMap[String, ModelProperty]) {
   private val LOGGER = LoggerFactory.getLogger(classOf[ModelPropertyParser])
 
   val typeMap = {
@@ -33,16 +33,16 @@ class ModelPropertyParser(cls: Class[_], t: Map[String, String] = Map.empty) (im
 
   def parse = Option(cls).map(parseRecursive(_))
 
-  def parseRecursive(hostClass: Class[_]): Unit = {
+  def parseRecursive(hostClass: ClassWrapper): Unit = {
     if(!hostClass.isEnum) {
       LOGGER.debug("processing class " + hostClass)
       for (method <- hostClass.getDeclaredMethods) {
         if (Modifier.isPublic(method.getModifiers()) && !Modifier.isStatic(method.getModifiers()))
-          parseMethod(method)
+          parseMethod(hostClass, method)
       }
       for (field <- hostClass.getDeclaredFields) {
         if (Modifier.isPublic(field.getModifiers()) && !Modifier.isStatic(field.getModifiers()))
-          parseField(field)
+          parseField(hostClass, field)
       }
       Option(hostClass.getSuperclass).map(parseRecursive(_))
     }
@@ -51,20 +51,20 @@ class ModelPropertyParser(cls: Class[_], t: Map[String, String] = Map.empty) (im
     }
   }
 
-  def parseField(field: Field) = {
-    LOGGER.debug("processing field " + field)
+  def parseField(hostClass: ClassWrapper, field: Field) = {
+    LOGGER.debug("processing field " + hostClass + "." + field)
 
-    val propertyMetaInfo = new PropertyMetaInfo(field.getDeclaringClass, field.getName, field.getAnnotations, field.getGenericType, field.getType)
-    val newMetaInfo = ModelReaders.reader.parseField(field, propertyMetaInfo)
+    val propertyMetaInfo = new PropertyMetaInfo(hostClass.getFieldType(field), field.getName, field.getAnnotations)
+    val newMetaInfo = ModelReaders.reader.parseField(hostClass, field, propertyMetaInfo)
     parsePropertyAnnotations(newMetaInfo)
   }
 
-  def parseMethod(method: Method) = {
+  def parseMethod(hostClass: ClassWrapper, method: Method) = {
     if (method.getParameterTypes == null || method.getParameterTypes.length == 0) {
       LOGGER.debug("processing method " + method)
 
-      val propertyMetaInfo = new PropertyMetaInfo(method.getReturnType, method.getName, method.getAnnotations, method.getGenericReturnType, method.getReturnType)
-      val newMetaInfo = ModelReaders.reader.parseMethod(method, propertyMetaInfo)
+      val propertyMetaInfo = new PropertyMetaInfo(hostClass.getMethodReturnType(method), method.getName, method.getAnnotations)
+      val newMetaInfo = ModelReaders.reader.parseMethod(hostClass, method, propertyMetaInfo)
       parsePropertyAnnotations(newMetaInfo)
     }
   }
@@ -85,11 +85,11 @@ class ModelPropertyParser(cls: Class[_], t: Map[String, String] = Map.empty) (im
 
   def parsePropertyAnnotations(metaInfo : PropertyMetaInfo): Any = {
     if (metaInfo != null) {
-      parsePropertyAnnotations(metaInfo.returnClass, metaInfo.propertyName, metaInfo.propertyAnnotations, metaInfo.genericReturnType, metaInfo.returnType)
+      parsePropertyAnnotations(metaInfo.returnClass, metaInfo.propertyName, metaInfo.propertyAnnotations)
     }
   }
 
-  def parsePropertyAnnotations(returnClass: Class[_], propertyName: String, propertyAnnotations: Array[Annotation], genericReturnType: Type, returnType: Type): Any = {
+  def parsePropertyAnnotations(returnClass: ClassWrapper, propertyName: String, propertyAnnotations: Array[Annotation]): Any = {
     val e = extractGetterProperty(propertyName)
     var originalName = e._1
     var isGetter = e._2
@@ -153,9 +153,9 @@ class ModelPropertyParser(cls: Class[_], t: Map[String, String] = Map.empty) (im
       isTransient = true
 
     if (!(isTransient && !isXmlElement && !isJsonProperty) && name != null && (isFieldExists || isGetter || isDocumented)) {
-      var paramType = getDataType(genericReturnType, returnType, false)
+      var paramType = getDataType(returnClass, false)
       LOGGER.debug("inspecting " + paramType)
-      var simpleName = getDataType(genericReturnType, returnType, true)
+      var simpleName = getDataType(returnClass, true)
 
       if (!"void".equals(paramType) && null != paramType && !processedFields.contains(name)) {
         if(!excludedFieldTypes.contains(paramType)) {
@@ -305,12 +305,12 @@ class ModelPropertyParser(cls: Class[_], t: Map[String, String] = Map.empty) (im
     else s.trim
   }
 
-  def getDeclaredField(inputClass: Class[_], fieldName: String): Field = {
+  def getDeclaredField(inputClass: ClassWrapper, fieldName: String): Field = {
     try {
       inputClass.getDeclaredField(fieldName)
     } catch {
       case t: NoSuchFieldException => {
-        if (inputClass.getSuperclass != null && inputClass.getSuperclass.getName != "Object") {
+        if (inputClass.getSuperclass != null && inputClass.getSuperclass.getName != "java.lang.Object") {
           getDeclaredField(inputClass.getSuperclass, fieldName)
         } else {
           throw t
@@ -356,50 +356,33 @@ class ModelPropertyParser(cls: Class[_], t: Map[String, String] = Map.empty) (im
     }
   }
 
-  def getDataType(genericReturnType: Type, returnType: Type, isSimple: Boolean = false): String = {
-    if (TypeUtil.isParameterizedList(genericReturnType)) {
-      val parameterizedType = genericReturnType.asInstanceOf[java.lang.reflect.ParameterizedType]
-      val valueType = parameterizedType.getActualTypeArguments.head
-      "List[" + getDataType(valueType, valueType, isSimple) + "]"
-    } else if (TypeUtil.isParameterizedSet(genericReturnType)) {
-      val parameterizedType = genericReturnType.asInstanceOf[java.lang.reflect.ParameterizedType]
-      val valueType = parameterizedType.getActualTypeArguments.head
-      "Set[" + getDataType(valueType, valueType, isSimple) + "]"
-    } else if (TypeUtil.isParameterizedMap(genericReturnType)) {
-      val parameterizedType = genericReturnType.asInstanceOf[java.lang.reflect.ParameterizedType]
-      val typeArgs = parameterizedType.getActualTypeArguments
-      val keyType = typeArgs(0)
-      val valueType = typeArgs(1)
-
-      val keyName: String = getDataType(keyType, keyType, isSimple)
-      val valueName: String = getDataType(valueType, valueType, isSimple)
-      "Map[" + keyName + "," + valueName + "]"
-    } else if (!returnType.getClass.isAssignableFrom(classOf[ParameterizedTypeImpl]) && returnType.isInstanceOf[Class[_]] && returnType.asInstanceOf[Class[_]].isArray) {
-      var arrayClass = returnType.asInstanceOf[Class[_]].getComponentType
-      "Array[" + readName(arrayClass, isSimple) + "]"
+  def getDataType(returnType: ClassWrapper, isSimple: Boolean = false): String = {
+    if (TypeUtil.isParameterizedList(returnType.getRawType)) {
+      val typeParameters = returnType.getRawClass.getTypeParameters
+      val types = typeParameters.map(t => getDataType(returnType.getTypeArgument(t.getName), isSimple))
+      "List" + types.mkString("[", ",", "]")
+    } else if (TypeUtil.isParameterizedSet(returnType.getRawType)) {
+      val typeParameters = returnType.getRawClass.getTypeParameters
+      val types = typeParameters.map(t => getDataType(returnType.getTypeArgument(t.getName), isSimple))
+      "Set" + types.mkString("[", ",", "]")
+    } else if (TypeUtil.isParameterizedMap(returnType.getRawType)) {
+      val typeParameters = returnType.getRawClass.getTypeParameters
+      val types = typeParameters.map(t => getDataType(returnType.getTypeArgument(t.getName), isSimple))
+      "Map" + types.mkString("[", ",", "]")
+    } else if (returnType.isArray) {
+      var arrayClass = returnType.getArrayComponent
+      "Array[" + getDataType(arrayClass, isSimple) + "]"
+    } else if (returnType.getRawClass == classOf[Option[_]]) {
+      val valueType = returnType.getTypeArgument(returnType.getRawClass.getTypeParameters.head.getName)
+      getDataType(valueType, isSimple)
+    } else if (classOf[Class[_]].isAssignableFrom(returnType.getRawClass)) {
+      // ignore Class
+      null
     } else {
-      if (genericReturnType.getClass.isAssignableFrom(classOf[TypeVariableImpl[_]])) {
-        genericReturnType.asInstanceOf[TypeVariableImpl[_]].getName
-      }
-      else if (!genericReturnType.getClass.isAssignableFrom(classOf[ParameterizedTypeImpl])) {
-        if(genericReturnType.isInstanceOf[Class[_]])
-          readName(genericReturnType.asInstanceOf[Class[_]], isSimple)
-        else{
-          LOGGER.debug("can't get type info for " + genericReturnType.toString)
-          genericReturnType.toString
-        }
-      } else {
-        val parameterizedType = genericReturnType.asInstanceOf[java.lang.reflect.ParameterizedType]
-        if (parameterizedType.getRawType == classOf[Option[_]]) {
-          val valueType = parameterizedType.getActualTypeArguments.head
-          getDataType(valueType, valueType, isSimple)
-        }
-        else {
-          genericReturnType.toString match {
-            case "java.lang.Class<?>" => null
-            case e: String => e
-          }
-        }
+      val typeParameters = returnType.getRawClass.getTypeParameters
+      val types = typeParameters.map(t => getDataType(returnType.getTypeArgument(t.getName), isSimple))
+      readName(returnType.getRawClass, isSimple) + {
+        if (types.length > 0) types.mkString("[", ",", "]") else ""
       }
     }
   }
