@@ -10,6 +10,7 @@ import org.json4s.jackson.JsonMethods._
 import org.json4s.jackson.Serialization.{read, write}
 
 import scala.collection.mutable.HashMap
+import com.wordnik.swagger.core.util.ClassWrapper
 
 class OverrideConverter
   extends ModelConverter 
@@ -41,7 +42,7 @@ class OverrideConverter
     }
   }
 
-  def read(cls: Class[_], typeMap: Map[String, String]): Option[Model] = {
+  def read(cls: ClassWrapper, typeMap: Map[String, String]): Option[Model] = {
     overrides.getOrElse(cls.getName, None)
   }
 }

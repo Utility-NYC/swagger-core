@@ -17,6 +17,7 @@
 package com.wordnik.swagger.core.util
 
 import com.wordnik.swagger.model._
+import scala.collection.mutable.HashMap
 
 trait ReaderUtil {
   def groupByResourcePath(listings: List[com.wordnik.swagger.model.ApiListing]): List[com.wordnik.swagger.model.ApiListing] = {
@@ -24,7 +25,18 @@ trait ReaderUtil {
     val grouped = tuples.groupBy(_._1)
     (for (group <- grouped) yield {
       val apiDescriptions = (for(g <- group._2; api <- g._2.apis) yield api).toList
-      group._2(0)._2.copy(apis = apiDescriptions)
+      val mergedModelBuffer = new HashMap[String, Model]
+      for(g <- group._2) g._2.models match {
+        case Some(models: Map[String, Model]) => models.foreach(m => mergedModelBuffer += m)
+        case None =>
+      }
+      val mergedModels = {
+        if (mergedModelBuffer.isEmpty)
+          None
+        else
+          Some(mergedModelBuffer.toMap)
+      }
+      group._2(0)._2.copy(apis = apiDescriptions, models = mergedModels)
     }).toList
   }
 }

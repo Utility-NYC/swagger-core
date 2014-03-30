@@ -83,7 +83,13 @@ object TypeUtil {
     else false
   }
 
-  def isParameterizedArray(genericType: Type): Boolean = genericType.getClass.isArray
+  def isParameterizedArray(genericType: Type): Boolean = {
+    genericType match {
+      case t: GenericArrayType => true
+      case t: Class[_] => t.isArray
+      case _ => false
+    }
+  }
 
   def isParameterizedScalaOption(genericType: Type): Boolean = {
     var isOption = false
@@ -153,7 +159,7 @@ object TypeUtil {
     try {
       val loadedClass = SwaggerContext.loadClass(cls)
       refs += cls
-      val refsToExpand = (referencesInFields(loadedClass) ++ referencesInMethods(loadedClass)) -- refs.toSet
+      val refsToExpand = (referencesInFields(loadedClass.getRawClass) ++ referencesInMethods(loadedClass.getRawClass)) -- refs.toSet
       refsToExpand.foreach(ref => {
         updateReferencedClasses(ref, refs)
         refs += ref

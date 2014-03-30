@@ -27,7 +27,7 @@ import com.wordnik.swagger.reader.ModelReaders
 
 object ModelUtil {
   private val LOGGER = LoggerFactory.getLogger(ModelUtil.getClass)
-  val ComplexTypeMatcher = "([\\w]*)\\[([\\w\\.\\-]*)\\].*".r
+  val ContainerMatcher = "(List|Array|Set)\\[(.*)\\].*?".r
 
   def stripPackages(apis: List[ApiDescription]): List[ApiDescription] = {
     (for(api <- apis) yield {
@@ -52,7 +52,7 @@ object ModelUtil {
 
   def cleanDataType(dataType: String) = {
     val typeInfo = dataType match {
-      case ComplexTypeMatcher(container, inner) => {
+      case ContainerMatcher(container, inner) => {
         val p = if(inner.indexOf(",") > 0)
           inner.split("\\,").last.trim
         else inner
@@ -101,7 +101,7 @@ object ModelUtil {
 
   def modelAndDependencies(name: String): Map[String, Model] = {
     val typeRef = name match {
-      case ComplexTypeMatcher(containerType, basePart) => {
+      case ContainerMatcher(containerType, basePart) => {
         LOGGER.debug("loading " + basePart + ", " + containerType)
         if(basePart.indexOf(",") > 0) // handle maps, i.e. List[String,String]
           basePart.split("\\,").last.trim
@@ -128,11 +128,7 @@ object ModelUtil {
 
   def modelFromString(name: String): Option[Tuple2[String, Model]] = {
     val typeRef = name match {
-      case ComplexTypeMatcher(containerType, basePart) => {
-        if(basePart.indexOf(",") > 0) // handle maps, i.e. List[String,String]
-          basePart.split("\\,").last.trim
-        else basePart
-      }
+      case ContainerMatcher(containerType, basePart) => basePart
       case _ => name
     }
     if(shoudIncludeModel(typeRef)) {
@@ -153,14 +149,14 @@ object ModelUtil {
     else None
   }
 
-  def toName(cls: Class[_]): String = {
+  def toName(cls: ClassWrapper): String = {
     import javax.xml.bind.annotation._
 
     val xmlRootElement = cls.getAnnotation(classOf[XmlRootElement])
     val xmlEnum = cls.getAnnotation(classOf[XmlEnum])
 
     if (xmlEnum != null && xmlEnum.value != null)
-      toName(xmlEnum.value())
+      toName(ClassWrapper(xmlEnum.value()))
     else if (xmlRootElement != null) {
       if ("##default".equals(xmlRootElement.name())) {
         cls.getSimpleName 

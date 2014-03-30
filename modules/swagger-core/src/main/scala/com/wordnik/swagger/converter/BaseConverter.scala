@@ -2,9 +2,10 @@ package com.wordnik.swagger.converter
 
 import com.wordnik.swagger.core.SwaggerSpec
 import com.wordnik.swagger.annotations.ApiModel
+import com.wordnik.swagger.core.util.ClassWrapper
 
 trait BaseConverter {
-  def toDescriptionOpt(cls: Class[_]): Option[String] = {
+  def toDescriptionOpt(cls: ClassWrapper): Option[String] = {
     var description: Option[String] = None
     for(anno <- cls.getAnnotations) {
       anno match {
@@ -17,14 +18,14 @@ trait BaseConverter {
     description
   }
 
-  def toName(cls: Class[_]): String = {
+  def toName(cls: ClassWrapper): String = {
     import javax.xml.bind.annotation._
 
     val xmlRootElement = cls.getAnnotation(classOf[XmlRootElement])
     val xmlEnum = cls.getAnnotation(classOf[XmlEnum])
 
     if (xmlEnum != null && xmlEnum.value != null)
-      toName(xmlEnum.value())
+      toName(ClassWrapper(xmlEnum.value()))
     else if (xmlRootElement != null) {
       if ("##default".equals(xmlRootElement.name())) {
         cls.getSimpleName 
