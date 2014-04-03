@@ -27,7 +27,7 @@ trait JaxrsApiReader extends ClassReader with ClassReaderUtils {
   def processParamAnnotations(mutable: MutableParameter, paramAnnotations: Array[Annotation]): Option[Parameter]
 
   // decorates an Operation
-  def processOperation(operation: Operation, method: Method, apiOperation: ApiOperation) : Operation = {
+  def processOperation(endpoint: String, operation: Operation, method: Method, apiOperation: ApiOperation) : Operation = {
     return operation;
   }
 
@@ -206,8 +206,7 @@ trait JaxrsApiReader extends ClassReader with ClassReaderUtils {
     }
     val isDeprecated = Option(method.getAnnotation(classOf[Deprecated])).map(m => "true").getOrElse(null)
 
-    val operation = parseOperation(method, apiOperation, apiResponses, isDeprecated, parentParams, parentMethods)
-    processOperation(operation, method, apiOperation)
+    parseOperation(method, apiOperation, apiResponses, isDeprecated, parentParams, parentMethods)
   }
 
   def appendOperation(endpoint: String, path: String, op: Operation, operations: ListBuffer[Tuple3[String, String, ListBuffer[Operation]]]) = {
@@ -295,8 +294,10 @@ trait JaxrsApiReader extends ClassReader with ClassReaderUtils {
             parentMethods -= method
           }
           case _ => {
-            if(method.getAnnotation(classOf[ApiOperation]) != null) {
-              val op = readMethod(method, parentParams, parentMethods)
+            val apiOperationAnnotation = method.getAnnotation(classOf[ApiOperation])
+            if (apiOperationAnnotation != null) {
+              var op = readMethod(method, parentParams, parentMethods)
+              op = processOperation(endpoint, op, method, apiOperationAnnotation)
               appendOperation(endpoint, path, op, operations)
             }
           }
