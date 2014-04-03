@@ -22,6 +22,7 @@ object SwaggerSerializers extends Serializers {
     new JsonSchemaParameterSerializer +
     new JsonSchemaOperationSerializer +
     new ResponseMessageSerializer +
+    new SampleSerializer +
     new ApiDescriptionSerializer +
     new ApiListingReferenceSerializer +
     new ResourceListingSerializer +
@@ -202,7 +203,8 @@ object SwaggerSerializers extends Serializers {
         authorizations,
         (json \ "parameters").extract[List[Parameter]],
         (json \ "responseMessages").extract[List[ResponseMessage]],
-        (json \ "deprecated").extractOpt[String]
+        (json \ "deprecated").extractOpt[String],
+        (json \ "samples").extract[List[Sample]]
       )
     }, {
       case x: Operation =>
@@ -251,7 +253,13 @@ object SwaggerSerializers extends Serializers {
           case _ => JNothing
         }
       }) ~
-      ("deprecated" -> x.`deprecated`)
+      ("deprecated" -> x.`deprecated`) ~
+      ("samples" -> {
+        x.samples match {
+          case e: List[Sample] if (e.size > 0) => Extraction.decompose(e)
+          case _ => JNothing
+        }
+      })
     }
   ))
 
@@ -405,6 +413,7 @@ object SwaggerJsonSchemaSerializers extends Serializers {
     new ParameterSerializer +
     new OperationSerializer +
     new ResponseMessageSerializer +
+    new SampleSerializer +
     new ApiDescriptionSerializer +
     new ApiListingReferenceSerializer +
     new ResourceListingSerializer +
@@ -679,6 +688,40 @@ trait Serializers {
     }
   ))
 
+  class SampleSerializer extends CustomSerializer[Sample](formats => ({
+    case json =>
+      implicit val fmts: Formats = formats
+      Sample(
+        (json \ "description").extractOrElse({
+          !!(json, ERROR, "reason", "missing required field", ERROR)
+          ""
+        }),
+        (json \ "requestUrl").extractOrElse({
+          !!(json, ERROR, "reason", "missing required field", ERROR)
+          ""
+        }),
+        (json \ "requestHeaders").extractOpt[String],
+        (json \ "requestBody").extractOpt[String],
+        (json \ "responseCode").extractOrElse({
+          !!(json, ERROR, "reason", "missing required field", ERROR)
+          0
+        }),
+        (json \ "responseHeaders").extractOpt[String],
+        (json \ "responseBody").extractOpt[String]
+      )
+    }, {
+      case x: Sample =>
+        implicit val fmts = formats
+          ("description" -> x.description) ~
+          ("requestUrl" -> x.requestUrl) ~
+          ("requestHeaders" -> x.requestHeaders) ~
+          ("requestBody" -> x.requestBody) ~
+          ("responseCode" -> x.responseCode) ~
+          ("responseHeaders" -> x.responseHeaders) ~
+          ("responseBody" -> x.responseBody)
+    }
+  ))
+
   class OperationSerializer extends CustomSerializer[Operation](formats => ({
     case json =>
       implicit val fmts: Formats = formats
@@ -704,7 +747,8 @@ trait Serializers {
         (json \ "authorizations").extractOrElse(List()),
         (json \ "parameters").extract[List[Parameter]],
         (json \ "responseMessages").extract[List[ResponseMessage]],
-        (json \ "deprecated").extractOpt[String]
+        (json \ "deprecated").extractOpt[String],
+        (json \ "samples").extract[List[Sample]]
       )
     }, {
       case x: Operation =>
@@ -752,7 +796,13 @@ trait Serializers {
           case _ => JNothing
         }
       }) ~
-      ("deprecated" -> x.`deprecated`)
+      ("deprecated" -> x.`deprecated`) ~
+      ("samples" -> {
+        x.samples match {
+          case e: List[Sample] if(e.size > 0) => Extraction.decompose(e)
+          case _ => JNothing
+        }
+      })
     }
   ))
 
