@@ -124,6 +124,6 @@ case class Sample (
   requestUrl: String,
   requestHeaders: Option[String],
   requestBody: Option[String],
-  responseCode: Int,
+  responseCode: String,
   responseHeaders: Option[String],
   responseBody: Option[String])
