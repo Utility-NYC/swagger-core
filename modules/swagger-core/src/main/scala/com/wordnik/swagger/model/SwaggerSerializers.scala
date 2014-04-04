@@ -704,7 +704,7 @@ trait Serializers {
         (json \ "requestBody").extractOpt[String],
         (json \ "responseCode").extractOrElse({
           !!(json, ERROR, "reason", "missing required field", ERROR)
-          0
+          ""
         }),
         (json \ "responseHeaders").extractOpt[String],
         (json \ "responseBody").extractOpt[String]
