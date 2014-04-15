@@ -58,45 +58,57 @@ object SwaggerSerializers extends Serializers {
       )
     }, {
     case x: Model =>
-      implicit val fmts = formats
-      val required: List[String] = (for((name, prop) <- x.properties) yield {
-        if(prop.required) Some(name)
-        else None
-      }).flatten.toList
-      ("id" -> x.id) ~  
-      ("description" -> x.description) ~
-      ("required" -> (required.size match {
-        case 0 => JNothing
-        case _ => Extraction.decompose(required)
-      })) ~
-      ("extends" -> {
-        x.baseModel match {
-          case Some(e) if(e != "void" && e != "java.lang.Void") => Extraction.decompose(e)
-          case _ =>JNothing
+      val ContainerMatcher = "(List|Array|Set)\\[(.*)\\].*?".r
+      val MapMatcher = "Map\\[([^\\],]*),\\s*([^\\],]*)\\].*?".r
+      x.name match {
+        case ContainerMatcher(container, value) => {
+          ("id" -> x.id) ~ toJsonSchemaContainer(value)
         }
-      }) ~
-      ("discriminator" -> {
-        x.discriminator match {
-          case Some(e) if (e.trim != "" && e.trim != "void") => Extraction.decompose(e)
-          case _ => JNothing
+        case MapMatcher(key, value) => {
+          ("id" -> x.id) ~ toJsonSchemaMap(value)
         }
-      }) ~
-      ("properties" -> {
-        x.properties match {
-          case e: LinkedHashMap[String, ModelProperty] => {
-            (for((key, value) <- e) yield (key -> Extraction.decompose(value))).toList
-          }
-          case _ => List.empty
+        case _ => {
+          implicit val fmts = formats
+          val required: List[String] = (for((name, prop) <- x.properties) yield {
+            if(prop.required) Some(name)
+            else None
+          }).flatten.toList
+          ("id" -> x.id) ~
+          ("description" -> x.description) ~
+          ("required" -> (required.size match {
+            case 0 => JNothing
+            case _ => Extraction.decompose(required)
+          })) ~
+          ("extends" -> {
+            x.baseModel match {
+              case Some(e) if(e != "void" && e != "java.lang.Void") => Extraction.decompose(e)
+              case _ =>JNothing
+            }
+          }) ~
+          ("discriminator" -> {
+            x.discriminator match {
+              case Some(e) if (e.trim != "" && e.trim != "void") => Extraction.decompose(e)
+              case _ => JNothing
+            }
+          }) ~
+          ("properties" -> {
+            x.properties match {
+              case e: LinkedHashMap[String, ModelProperty] => {
+                (for((key, value) <- e) yield (key -> Extraction.decompose(value))).toList
+              }
+              case _ => List.empty
+            }
+          }) ~
+          ("subTypes" -> {
+            x.subTypes match {
+              case e: List[String] if (e.size > 0) => {
+                Extraction.decompose(for(m <- e) yield ModelUtil.cleanDataType(m))
+              }
+              case _ => JNothing
+            }
+          })
         }
-      }) ~
-      ("subTypes" -> {
-        x.subTypes match {
-          case e: List[String] if (e.size > 0) => {
-            Extraction.decompose(for(m <- e) yield ModelUtil.cleanDataType(m))
-          }
-          case _ => JNothing
-        }
-      })
+      }
     }
   ))
 
@@ -115,6 +127,7 @@ object SwaggerSerializers extends Serializers {
       case "date-time" => (name -> "string")  ~ ("format" -> "date-time")
       case _           => {
         val ContainerMatcher = "(List|Array|Set)\\[(.*)\\].*?".r
+        val MapMatcher = "Map\\[([^\\],]*),\\s*([^\\],]*)\\].*?".r
         `type` match {
           case ContainerMatcher(container, value) =>
             toJsonSchemaContainer(container) ~ {
@@ -123,6 +136,8 @@ object SwaggerSerializers extends Serializers {
                 else
                   toJsonSchema("$ref", value)})
             }
+          case MapMatcher(key, value) =>
+            toJsonSchemaMap(value)
           case _ => (name -> `type`)    ~ ("format" -> JNothing)
         }
       }
@@ -136,6 +151,16 @@ object SwaggerSerializers extends Serializers {
       case "Set"       => ("type" -> "array")   ~ ("uniqueItems" -> true)
       case _           => ("type" -> JNothing)
     }
+  }
+
+  def toJsonSchemaMap(value: String): JObject = {
+    ("type" -> "object") ~ ("patternProperties" ->
+      (".*" -> {
+          if(isSimpleType(value))
+            toJsonSchema("type", value)
+          else
+            toJsonSchema("$ref", value)
+      }))
   }
 
   def isSimpleType(name: String) = {
@@ -152,6 +177,16 @@ object SwaggerSerializers extends Serializers {
         case "List"      => ("type" -> "array")   ~ ("format" -> JNothing)
         case "Array"     => ("type" -> "array")   ~ ("format" -> JNothing)
         case "Set"       => ("type" -> "array")   ~ ("uniqueItems" -> true)
+      }
+    }
+    else if (prop.`type`.startsWith("Map[")) {
+      val MapMatcher = "Map\\[([^\\],]*),\\s*([^\\],]*)\\].*?".r
+      prop.`type` match {
+        case MapMatcher(key, value) => {
+          toJsonSchemaMap(value)
+        }
+        case _ =>
+          ("$ref" -> prop.`type`) ~ ("format" -> JNothing)
       }
     }
     else ("$ref" -> prop.`type`)                  ~ ("format" -> JNothing)
@@ -401,26 +436,6 @@ object SwaggerSerializers extends Serializers {
       }
     }
   ))
-}
-
-object SwaggerJsonSchemaSerializers extends Serializers {
-// object SwaggerSerializers extends Serializers {
-  implicit val formats = DefaultFormats + 
-    new ModelSerializer + 
-    new ModelPropertySerializer +
-    new ModelRefSerializer + 
-    new AllowableValuesSerializer + 
-    new ParameterSerializer +
-    new OperationSerializer +
-    new ResponseMessageSerializer +
-    new SampleSerializer +
-    new ApiDescriptionSerializer +
-    new ApiListingReferenceSerializer +
-    new ResourceListingSerializer +
-    new ApiInfoSerializer +
-    new ApiListingSerializer +
-    new AuthorizationTypeSerializer + 
-    new AuthorizationSerializer
 }
 
 trait Serializers {
@@ -858,116 +873,6 @@ trait Serializers {
       }) ~
       ("paramType" -> x.paramType) ~
       ("paramAccess" -> x.paramAccess)
-    }
-  ))
-
-  class ModelSerializer extends CustomSerializer[Model](formats => ({
-    case json =>
-      implicit val fmts: Formats = formats
-      val output = new LinkedHashMap[String, ModelProperty]
-      val properties = (json \ "properties") match {
-        case JObject(entries) => {
-          entries.map({
-            case (key, value) => output += key -> value.extract[ModelProperty]
-          })
-        }
-        case _ =>
-      }
-
-      Model(
-        (json \ "id").extractOrElse({
-          !!(json, MODEL, "id", "missing required field", ERROR)
-          ""
-        }),
-        (json \ "name").extractOrElse((json \ "id").extract[String]),
-        (json \ "qualifiedType").extractOrElse(""),
-        output,
-        (json \ "description").extractOpt[String],
-        (json \ "extends").extractOpt[String],
-        (json \ "discriminator").extractOpt[String]
-      )
-    }, {
-    case x: Model =>
-      implicit val fmts = formats
-      ("id" -> x.id) ~
-      ("name" -> x.name) ~
-      ("properties" -> {
-        x.properties match {
-          case e: LinkedHashMap[String, ModelProperty] => Extraction.decompose(e.toMap)
-          case _ => JNothing
-        }
-      }) ~
-      ("description" -> x.description) ~
-      ("extends" -> {
-        x.baseModel match {
-          case Some(e) if(e != "void") => Extraction.decompose(e)
-          case _ => JNothing
-        }
-      }) ~
-      ("discriminator" -> {
-        x.discriminator match {
-          case Some(e) if (e.trim != "" && e.trim != "void") => Extraction.decompose(e)
-          case _ => JNothing
-        }
-      })
-    }
-  ))
-
-  class ModelPropertySerializer extends CustomSerializer[ModelProperty] (formats => ({
-    case json =>
-      implicit val fmts: Formats = formats
-      ModelProperty(
-        `type` = (json \ "type").extractOrElse(""),
-        qualifiedType = (json \ "type").extractOrElse(""),
-        position = (json \ "position").extractOrElse(0),
-        (json \ "required") match {
-          case e:JString => e.s.toBoolean
-          case e:JBool => e.value
-          case _ => false
-        },
-        description = (json \ "description").extractOpt[String],
-        allowableValues = (json \ "allowableValues").extract[AllowableValues],
-        items = {
-          (json \ "items").extractOpt[ModelRef] match {
-            case Some(e: ModelRef) if(e.`type` != null || e.ref != None) => Some(e)
-            case _ => None
-          }
-        }
-      )
-    }, {
-    case x: ModelProperty =>
-      implicit val fmts = formats
-      ("type" -> x.`type`) ~
-      ("required" -> x.required) ~
-      ("description" -> x.description) ~
-      ("allowableValues" -> {
-        x.allowableValues match {
-          case AnyAllowableValues => JNothing // don't serialize when not a concrete type
-          case e:AllowableValues => Extraction.decompose(x.allowableValues)
-          case _ => JNothing
-        }
-      }) ~
-      ("items" -> Extraction.decompose(x.items))
-    }
-  ))
-
-  class ModelRefSerializer extends CustomSerializer[ModelRef](formats => ({
-    case json =>
-      implicit val fmts: Formats = formats
-      ModelRef(
-        (json \ "type").extractOrElse(null: String),
-        (json \ "$ref").extractOpt[String]
-      )
-    }, {
-      case x: ModelRef =>
-      implicit val fmts = formats
-      ("type" -> {
-        x.`type` match {
-          case e:String => Some(e)
-          case _ => None
-        }
-      }) ~
-      ("$ref" -> x.ref)
     }
   ))
 

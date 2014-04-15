@@ -24,6 +24,7 @@ object SwaggerContext {
           case "List" => classOf[List[_]]
           case "Array" => classOf[Array[_]]
           case "Set" => classOf[Set[_]]
+          case "Map" => classOf[Map[_,_]]
           case name => Class.forName(name, true, classLoader)
         })
       } catch {

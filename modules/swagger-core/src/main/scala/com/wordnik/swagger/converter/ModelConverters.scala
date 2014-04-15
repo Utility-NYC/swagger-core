@@ -12,6 +12,7 @@ object ModelConverters {
   private val LOGGER = LoggerFactory.getLogger(ModelConverters.getClass)
 
   val converters = new ListBuffer[ModelConverter]() ++ List(
+    new MapConverter,
     new JodaDateTimeConverter,
     new SwaggerSchemaConverter
   )
