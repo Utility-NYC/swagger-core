@@ -37,11 +37,11 @@ class ModelPropertyParser(cls: ClassWrapper, t: Map[String, String] = Map.empty)
     if(!hostClass.isEnum) {
       LOGGER.debug("processing class " + hostClass)
       for (method <- hostClass.getDeclaredMethods) {
-        if (Modifier.isPublic(method.getModifiers()) && !Modifier.isStatic(method.getModifiers()))
+        if (Modifier.isPublic(method.getModifiers()) && !Modifier.isStatic(method.getModifiers()) && !method.isSynthetic())
           parseMethod(hostClass, method)
       }
       for (field <- hostClass.getDeclaredFields) {
-        if (Modifier.isPublic(field.getModifiers()) && !Modifier.isStatic(field.getModifiers()))
+        if (Modifier.isPublic(field.getModifiers()) && !Modifier.isStatic(field.getModifiers()) && !field.isSynthetic())
           parseField(hostClass, field)
       }
       Option(hostClass.getSuperclass).map(parseRecursive(_))
