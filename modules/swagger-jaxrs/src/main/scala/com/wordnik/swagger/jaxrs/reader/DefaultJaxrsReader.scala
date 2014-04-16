@@ -13,7 +13,7 @@ import javax.ws.rs.core.Context
 
 class DefaultJaxrsApiReader extends JaxrsApiReader {
   // decorates a Parameter based on annotations, returns None if param should be ignored
-  def processParamAnnotations(mutable: MutableParameter, paramAnnotations: Array[Annotation]): Option[Parameter] = {
+  def processParamAnnotations(mutable: MutableParameter, paramAnnotations: Array[Annotation]): List[Parameter] = {
     var shouldIgnore = false
     for (pa <- paramAnnotations) {
       pa match {
@@ -55,9 +55,9 @@ class DefaultJaxrsApiReader extends JaxrsApiReader {
         mutable.paramType = TYPE_BODY
         mutable.name = TYPE_BODY
       }
-      Some(mutable.asParameter)
+      List(mutable.asParameter)
     }
-    else None
+    else List.empty
   }
 
   def findSubresourceType(method: Method): Class[_] = {

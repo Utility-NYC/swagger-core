@@ -24,7 +24,7 @@ trait JaxrsApiReader extends ClassReader with ClassReaderUtils {
   val GenericTypeMapper = "([a-zA-Z\\.]*)<([a-zA-Z0-9\\.\\,\\s]*)>".r
 
   // decorates a Parameter based on annotations, returns None if param should be ignored
-  def processParamAnnotations(mutable: MutableParameter, paramAnnotations: Array[Annotation]): Option[Parameter]
+  def processParamAnnotations(mutable: MutableParameter, paramAnnotations: Array[Annotation]): List[Parameter]
 
   // decorates an Operation
   def processOperation(endpoint: String, operation: Operation, method: Method, apiOperation: ApiOperation) : Operation = {
@@ -146,7 +146,7 @@ trait JaxrsApiReader extends ClassReader with ClassReaderUtils {
         param.name = TYPE_BODY
         param.paramType = TYPE_BODY
 
-        Some(param.asParameter)
+        List(param.asParameter)
       }
     }).flatten.toList
 
@@ -260,24 +260,7 @@ trait JaxrsApiReader extends ClassReader with ClassReaderUtils {
         case _ => None
       }
       // look for method-level annotated properties
-      val parentParams: List[Parameter] = (for(field <- getAllFields(cls)) 
-        yield {
-          // only process fields with @ApiParam, @QueryParam, @HeaderParam, @PathParam
-          if(field.getAnnotation(classOf[QueryParam]) != null || field.getAnnotation(classOf[HeaderParam]) != null ||
-            field.getAnnotation(classOf[HeaderParam]) != null || field.getAnnotation(classOf[PathParam]) != null ||
-            field.getAnnotation(classOf[ApiParam]) != null) { 
-            val param = new MutableParameter
-            param.dataType = field.getType.getName
-            Option (field.getAnnotation(classOf[ApiParam])) match {
-              case Some(annotation) => toAllowableValues(annotation.allowableValues)
-              case _ =>
-            }
-            val annotations = field.getAnnotations
-            processParamAnnotations(param, annotations)
-          }
-          else None
-        }
-      ).flatten.toList
+      val parentParams: List[Parameter] = getAllParamsFromFields(cls)
 
       for(method <- cls.getMethods) {
         val returnType = findSubresourceType(method)
@@ -344,6 +327,25 @@ trait JaxrsApiReader extends ClassReader with ClassReaderUtils {
         fields = getAllFields(cls.getSuperclass()) ++ fields;
     }   
     return fields;
+  }
+
+  def getAllParamsFromFields(cls: Class[_]): List[Parameter] = {
+    (for(field <- getAllFields(cls)) yield {
+      // only process fields with @ApiParam, @QueryParam, @HeaderParam, @PathParam
+      if(field.getAnnotation(classOf[QueryParam]) != null || field.getAnnotation(classOf[HeaderParam]) != null ||
+        field.getAnnotation(classOf[HeaderParam]) != null || field.getAnnotation(classOf[PathParam]) != null ||
+        field.getAnnotation(classOf[ApiParam]) != null) {
+        val param = new MutableParameter
+        param.dataType = field.getType.getName
+        Option (field.getAnnotation(classOf[ApiParam])) match {
+          case Some(annotation) => toAllowableValues(annotation.allowableValues)
+          case _ =>
+        }
+        val annotations = field.getAnnotations
+        processParamAnnotations(param, annotations)
+      }
+      else List.empty
+    }).flatten.toList
   }
   
   def pathFromMethod(method: Method): String = {

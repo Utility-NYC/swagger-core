@@ -40,7 +40,7 @@ import com.sun.jersey.api.core.InjectParam
 class JerseyApiReader extends JaxrsApiReader {
   private val LOGGER = LoggerFactory.getLogger(classOf[JerseyApiReader])
 
-  def processParamAnnotations(mutable: MutableParameter, paramAnnotations: Array[Annotation]): Option[Parameter] = {
+  def processParamAnnotations(mutable: MutableParameter, paramAnnotations: Array[Annotation]): List[Parameter] = {
     var shouldIgnore = false
     for (pa <- paramAnnotations) {
       pa match {
@@ -98,9 +98,9 @@ class JerseyApiReader extends JaxrsApiReader {
         mutable.paramType = TYPE_BODY
         mutable.name = TYPE_BODY
       }
-      Some(mutable.asParameter)
+      List(mutable.asParameter)
     }
-    else None
+    else List()
   }
 
   def findSubresourceType(method: Method): Class[_] = {
