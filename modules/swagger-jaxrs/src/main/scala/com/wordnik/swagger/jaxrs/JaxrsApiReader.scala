@@ -336,7 +336,7 @@ trait JaxrsApiReader extends ClassReader with ClassReaderUtils {
         field.getAnnotation(classOf[HeaderParam]) != null || field.getAnnotation(classOf[PathParam]) != null ||
         field.getAnnotation(classOf[ApiParam]) != null) {
         val param = new MutableParameter
-        param.dataType = field.getType.getName
+        param.dataType = processDataType(field.getType, field.getGenericType)
         Option (field.getAnnotation(classOf[ApiParam])) match {
           case Some(annotation) => toAllowableValues(annotation.allowableValues)
           case _ =>
