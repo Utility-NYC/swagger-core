@@ -2,7 +2,7 @@ package com.wordnik.swagger.converter
 
 import com.wordnik.swagger.model._
 import com.wordnik.swagger.core.{ SwaggerSpec, SwaggerTypes }
-import com.wordnik.swagger.core.util.{ClassWrapper, TypeUtil}
+import com.wordnik.swagger.core.util.{ModelUtil, ClassWrapper, TypeUtil}
 import com.wordnik.swagger.annotations.ApiModelProperty
 
 import com.fasterxml.jackson.annotation.{JsonIgnore, JsonProperty}
@@ -20,6 +20,8 @@ import com.wordnik.swagger.reader.{PropertyMetaInfo, ModelReaders}
 
 class ModelPropertyParser(cls: ClassWrapper, t: Map[String, String] = Map.empty) (implicit properties: LinkedHashMap[String, ModelProperty]) {
   private val LOGGER = LoggerFactory.getLogger(classOf[ModelPropertyParser])
+
+  import ModelUtil._
 
   val typeMap = {
     if(t.isEmpty)
@@ -202,12 +204,6 @@ class ModelPropertyParser(cls: ClassWrapper, t: Map[String, String] = Map.empty)
     }
   }
 
-  def validateDatatype(dataType: String): String = {
-    val o = typeMap.getOrElse(dataType.toLowerCase, dataType)
-    LOGGER.debug("validating datatype " + dataType + " against " + typeMap.size + " keys, got " + o)
-    o
-  }
-
   def isComplex(typeName: String): Boolean = {
     !SwaggerSpec.baseTypes.contains(typeName.toLowerCase)
   }
@@ -289,22 +285,6 @@ class ModelPropertyParser(cls: ClassWrapper, t: Map[String, String] = Map.empty)
     output
   }
 
-  def readString(s: String, existingValue: String = null, ignoreValue: String = null): String = {
-    /*
-    if (s == null && existingValue != null && existingValue.trim.length > 0) existingValue
-    else if (s == null) null
-    else if (s.trim.length == 0) null
-    else if (ignoreValue != null && s.equals(ignoreValue)) null
-    else s.trim
-    */
-    var newExistingVal = existingValue
-    if (existingValue != null && existingValue.trim.length > 0) newExistingVal = existingValue.trim
-    if (s == null) newExistingVal
-    else if (s.trim.length == 0) newExistingVal
-    else if (ignoreValue != null && s.equals(ignoreValue)) newExistingVal
-    else s.trim
-  }
-
   def getDeclaredField(inputClass: ClassWrapper, fieldName: String): Field = {
     try {
       inputClass.getDeclaredField(fieldName)
@@ -356,60 +336,4 @@ class ModelPropertyParser(cls: ClassWrapper, t: Map[String, String] = Map.empty)
     }
   }
 
-  def getDataType(returnType: ClassWrapper, isSimple: Boolean = false): String = {
-    if (TypeUtil.isParameterizedList(returnType.getRawType)) {
-      val typeParameters = returnType.getRawClass.getTypeParameters
-      val types = typeParameters.map(t => getDataType(returnType.getTypeArgument(t.getName), isSimple))
-      "List" + types.mkString("[", ",", "]")
-    } else if (TypeUtil.isParameterizedSet(returnType.getRawType)) {
-      val typeParameters = returnType.getRawClass.getTypeParameters
-      val types = typeParameters.map(t => getDataType(returnType.getTypeArgument(t.getName), isSimple))
-      "Set" + types.mkString("[", ",", "]")
-    } else if (TypeUtil.isParameterizedMap(returnType.getRawType)) {
-      val typeParameters = returnType.getRawClass.getTypeParameters
-      val types = typeParameters.map(t => getDataType(returnType.getTypeArgument(t.getName), isSimple))
-      "Map" + types.mkString("[", ",", "]")
-    } else if (returnType.isArray) {
-      var arrayClass = returnType.getArrayComponent
-      "Array[" + getDataType(arrayClass, isSimple) + "]"
-    } else if (returnType.getRawClass == classOf[Option[_]]) {
-      val valueType = returnType.getTypeArgument(returnType.getRawClass.getTypeParameters.head.getName)
-      getDataType(valueType, isSimple)
-    } else if (classOf[Class[_]].isAssignableFrom(returnType.getRawClass)) {
-      // ignore Class
-      null
-    } else {
-      val typeParameters = returnType.getRawClass.getTypeParameters
-      val types = typeParameters.map(t => getDataType(returnType.getTypeArgument(t.getName), isSimple))
-      readName(returnType.getRawClass, isSimple) + {
-        if (types.length > 0) types.mkString("[", ",", "]") else ""
-      }
-    }
-  }
-
-  def readName(hostClass: Class[_], isSimple: Boolean = true): String = {
-    val xmlRootElement = hostClass.getAnnotation(classOf[XmlRootElement])
-    val xmlEnum = hostClass.getAnnotation(classOf[XmlEnum])
-
-    val name = {
-      if (xmlEnum != null && xmlEnum.value() != null) {
-        if (isSimple) readName(xmlEnum.value())
-        else hostClass.getName
-      } else if (xmlRootElement != null) {
-        if ("##default".equals(xmlRootElement.name())) {
-          if (isSimple) hostClass.getSimpleName 
-          else hostClass.getName
-        } else {
-          if (isSimple) readString(xmlRootElement.name())
-          else hostClass.getName
-        }
-      } else if (hostClass.getName.startsWith("java.lang.") && isSimple) {
-        hostClass.getName.substring("java.lang.".length)
-      } else {
-        if (isSimple) hostClass.getSimpleName
-        else hostClass.getName
-      }
-    }
-    validateDatatype(name)
-  }
 }

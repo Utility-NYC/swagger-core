@@ -32,7 +32,7 @@ trait SwaggerSpecFilter {
 }
 
 class SpecFilter {
-  val ContainerMatcher = "(List|Array|Set)\\[(.*)\\].*?".r
+  val ContainerMatcher = "(List|Array|Set|Map)\\[(.*)\\].*?".r
   private val LOGGER = LoggerFactory.getLogger(classOf[SpecFilter])
 
   def filter(listing: ApiListing, filter: SwaggerSpecFilter, params: Map[String, List[String]], cookies: Map[String, String], headers: Map[String, List[String]]) = {
@@ -89,7 +89,7 @@ class SpecFilter {
     LOGGER.debug("requiredModels: " + modelNames)
     val topLevelModels = (for(model <- modelNames) yield {
       model match {
-        case ContainerMatcher(basePart) => {
+        case ContainerMatcher(container, basePart) => {
           if(basePart.indexOf(",") > 0) // it's a map, use the value only
             basePart.split(",")(1)
           else basePart
@@ -116,15 +116,26 @@ class SpecFilter {
   }
 
   def requiredProperties(models: List[String], allModels: Map[String, Model], inspectedTypes: HashSet[String]): List[String] = {
-    (for(modelname <- models) yield {
+    val mapModel = (model: String) => {
+      model match {
+        case ContainerMatcher(container, basePart) => {
+          if(basePart.indexOf(",") > 0) // it's a map, use the value only
+            basePart.split(",")(1)
+          else basePart
+        }
+        case _ => model
+      }
+    }
+
+    (for(modelname <- models.map(mapModel)) yield {
       val modelnames = new HashSet[String]()
       if(allModels.contains(modelname) && !inspectedTypes.contains(modelname)) {
         val model = allModels(modelname)
         inspectedTypes += modelname
         model.properties.map(m => {
           m._2.items match {
-            case Some(item) => modelnames += item.ref.getOrElse(item.`type`)
-            case None => modelnames += m._2.`type`
+            case Some(item) => modelnames += mapModel(item.ref.getOrElse(item.`type`))
+            case None => modelnames += mapModel(m._2.`type`)
           }
         })
       }
