@@ -121,8 +121,9 @@ class ModelPropertyParser(cls: ClassWrapper, t: Map[String, String] = Map.empty)
         processedAnnotations("allowableValues").asInstanceOf[Option[AllowableValues]]
     }
 
+    var fieldAnnotations: Array[Annotation] = null
     try {
-      val fieldAnnotations = getDeclaredField(this.cls, originalName).getAnnotations()
+      fieldAnnotations = getDeclaredField(this.cls, originalName).getAnnotations()
 
       var propAnnoOutput = processAnnotations(originalName, fieldAnnotations)
       var propPosition = propAnnoOutput("position").asInstanceOf[Int]
@@ -182,7 +183,7 @@ class ModelPropertyParser(cls: ClassWrapper, t: Map[String, String] = Map.empty)
               case _ => None
             }
           }
-          val param = ModelProperty(
+          var param = ModelProperty(
             validateDatatype(simpleName),
             paramType,
             position,
@@ -190,6 +191,7 @@ class ModelPropertyParser(cls: ClassWrapper, t: Map[String, String] = Map.empty)
             description,
             allowableValues.getOrElse(AnyAllowableValues),
             items)
+          param = ModelReaders.reader.processModelProperty(param, returnClass, propertyAnnotations, fieldAnnotations)
           LOGGER.debug("added param type " + paramType + " for field " + name)
           properties += name -> param
         }
