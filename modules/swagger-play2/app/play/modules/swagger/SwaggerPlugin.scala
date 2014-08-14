@@ -76,6 +76,6 @@ class SwaggerPlugin(application: Application) extends Plugin {
 
   override def onStop() {
     ApiListingCache.cache = None
-    Logger("swagger").info("Plugin - stopped");
+    Logger("swagger").info("Plugin - stopped")
   }
 }
