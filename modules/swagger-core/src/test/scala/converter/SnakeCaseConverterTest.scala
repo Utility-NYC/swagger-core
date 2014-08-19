@@ -48,7 +48,7 @@ class SnakeCaseModel {
 }
 
 class SnakeCaseConverter extends SwaggerSchemaConverter {
-  override def read(cls: Class[_], typeMap: Map[String, String] = Map.empty): Option[Model] = {
+  override def read(cls: ClassWrapper, typeMap: Map[String, String] = Map.empty): Option[Model] = {
     super.read(cls, typeMap).map(model => {
       val properties = new LinkedHashMap[String, ModelProperty]
  

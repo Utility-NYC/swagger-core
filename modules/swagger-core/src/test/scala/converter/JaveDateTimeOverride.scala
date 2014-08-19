@@ -13,16 +13,18 @@ import org.scalatest.junit.JUnitRunner
 import org.scalatest.FlatSpec
 import org.scalatest.matchers.ShouldMatchers
 
-import scala.beans.BeanProperty
+import scala.reflect.BeanProperty
 
 @RunWith(classOf[JUnitRunner])
 class JaveDateTimeOverride extends FlatSpec with ShouldMatchers {
-  val javaDateTimeConverter = new JavaDateTimeConverter
-  ModelConverters.addConverter(javaDateTimeConverter, true)
-  val models = ModelConverters.readAll(classOf[ModelWithDate])
-  JsonSerializer.asJson(models) should be ("""[{"id":"ModelWithDate","properties":{"dateValue":{"type":"integer","format":"int64"}}}]""")
-  // cleanup to avoid impacting other test cases with Date model members
-  ModelConverters.removeConverter(javaDateTimeConverter)
+  it should "map date to long" in {
+    val javaDateTimeConverter = new JavaDateTimeConverter
+    ModelConverters.addConverter(javaDateTimeConverter, true)
+    val models = ModelConverters.readAll(classOf[ModelWithDate])
+    JsonSerializer.asJson(models) should be( """[{"id":"ModelWithDate","properties":{"dateValue":{"type":"integer","format":"int64"}}}]""")
+    // cleanup to avoid impacting other test cases with Date model members
+    ModelConverters.removeConverter(javaDateTimeConverter)
+  }
 }
 
 class JavaDateTimeConverter extends SwaggerSchemaConverter {

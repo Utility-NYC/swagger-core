@@ -9,12 +9,13 @@ import org.slf4j.LoggerFactory
 import java.lang.reflect.Modifier
 import scala.collection.mutable
 import scala.collection.mutable.LinkedHashMap
+import com.wordnik.swagger.core.util.ClassWrapper
 
 class SwaggerSchemaConverter 
   extends ModelConverter 
   with BaseConverter {
 
-  def read(cls: Class[_], typeMap: Map[String, String]): Option[Model] = {
+  def read(cls: ClassWrapper, typeMap: Map[String, String]): Option[Model] = {
     Option(cls).flatMap({
       cls => {
         implicit val properties = new LinkedHashMap[String, ModelProperty]()

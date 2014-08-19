@@ -80,19 +80,19 @@
     <dependency>
       <groupId>org.json4s</groupId>
       <artifactId>json4s-ext_2.10</artifactId>
-      <version>${json4s-version}</version>
+      <version>3.2.4</version>
       <scope>compile</scope>
     </dependency> 
     <dependency>
       <groupId>org.json4s</groupId>
       <artifactId>json4s-native_2.10</artifactId>
-      <version>${json4s-version}</version>
+      <version>3.2.4</version>
       <scope>compile</scope>
     </dependency>    
     <dependency>
       <groupId>org.json4s</groupId>
       <artifactId>json4s-jackson_2.10</artifactId>
-      <version>${json4s-version}</version>
+      <version>3.2.4</version>
       <scope>compile</scope>
     </dependency>
     <dependency>

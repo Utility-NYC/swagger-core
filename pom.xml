@@ -347,7 +347,6 @@
     <module>modules/swagger-jersey-jaxrs</module>
     <module>modules/swagger-jersey2-jaxrs</module>
     <module>modules/swagger-servlet</module>
-    <module>modules/swagger-utils</module>
     <module>modules/swagger-oauth2-auth-server</module>
   </modules>
   <reporting>
@@ -499,10 +498,9 @@
     <servlet-api-version>2.5</servlet-api-version>
     <jersey-version>1.13</jersey-version>
     <jersey2-version>2.1</jersey2-version>
-    <jackson-version>2.4.1</jackson-version>
-    <jackson-scala-version>2.4.1</jackson-scala-version>
+    <jackson-version>2.1.5</jackson-version>
+    <jackson-scala-version>2.1.5</jackson-scala-version>
     <logback-version>1.0.1</logback-version>
-    <json4s-version>3.2.9</json4s-version>
 
     <junit-version>4.8.1</junit-version>
     <maven-plugin-version>1.0.0</maven-plugin-version>
@@ -511,6 +509,6 @@
     <scala-test-version>1.9</scala-test-version>
     <jetty-version>8.1.11.v20130520</jetty-version>
     <servlet-api-version>2.5</servlet-api-version>
-    <scala-maven-plugin-version>3.1.5</scala-maven-plugin-version>
+    <scala-maven-plugin-version>3.1.0</scala-maven-plugin-version>
   </properties>
 </project>

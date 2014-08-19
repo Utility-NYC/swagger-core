@@ -17,6 +17,7 @@
 package com.wordnik.swagger.core.util
 
 import com.wordnik.swagger.model._
+import scala.collection.mutable.HashMap
 
 trait ReaderUtil {
   def groupByResourcePath(listings: List[com.wordnik.swagger.model.ApiListing]): List[com.wordnik.swagger.model.ApiListing] = {

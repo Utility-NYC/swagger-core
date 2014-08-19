@@ -100,7 +100,8 @@ case class Operation (
   authorizations: List[Authorization] = List.empty,
   parameters: List[Parameter] = List.empty,
   responseMessages: List[ResponseMessage] = List.empty,
-  `deprecated`: Option[String] = None)
+  `deprecated`: Option[String] = None,
+  samples: List[Sample] = List.empty)
 
 case class Parameter (
   name: String,
@@ -117,3 +118,12 @@ case class ResponseMessage (
   code: Int,
   message: String,
   responseModel: Option[String] = None)
+
+case class Sample (
+  description: String,
+  requestUrl: String,
+  requestHeaders: Option[String],
+  requestBody: Option[String],
+  responseCode: String,
+  responseHeaders: Option[String],
+  responseBody: Option[String])

@@ -6,12 +6,14 @@ import com.wordnik.swagger.model._
 import org.slf4j.LoggerFactory
 
 import scala.collection.mutable.{ ListBuffer, LinkedHashMap, HashSet, HashMap }
+import com.wordnik.swagger.core.util._
 
 object ModelConverters {
   private val LOGGER = LoggerFactory.getLogger(ModelConverters.getClass)
   val ComplexTypeMatcher = "([a-zA-Z]*)\\[([a-zA-Z\\.\\-]*)\\].*".r
 
   val converters = new ListBuffer[ModelConverter]() ++ List(
+    new MapConverter,
     new JodaDateTimeConverter,
     new JodaLocalDateConverter,
     new SwaggerSchemaConverter
@@ -32,7 +34,8 @@ object ModelConverters {
     converters -= c
   }
 
-  def read(cls: Class[_], t: Map[String, String] = Map.empty): Option[Model] = {
+
+  def read(cls: ClassWrapper, t: Map[String, String] = Map.empty): Option[Model] = {
     val types = {
       if(t.isEmpty)typeMap
       else t
@@ -75,14 +78,18 @@ object ModelConverters {
     model.map(m => {
       output += cls.getName -> m
       val checkedNames = new HashSet[String]
-      addRecursive(m, checkedNames, output)
+      addRecursive(cls, m, checkedNames, output)
     })
     output.values.toList
   }
 
-  def addRecursive(model: Model, checkedNames: HashSet[String], output: HashMap[String, Model]): Unit = {
+  def addRecursive(modelCls: ClassWrapper, model: Model, checkedNames: HashSet[String], output: HashMap[String, Model]): Unit = {
     if(!checkedNames.contains(model.name)) {
       val propertyNames = new HashSet[String]
+      val typeParams = modelCls.getRawClass.getTypeParameters.map(t => modelCls.getTypeArgument(t.getName))
+      for (typeParam <- typeParams) {
+        propertyNames += typeParam.getName
+      }
       for((name, property) <- model.properties) {
         val propertyName = property.items match {
           case Some(item) => item.qualifiedType.getOrElse(item.`type`)
@@ -107,7 +114,7 @@ object ModelConverters {
             ModelConverters.read(cls, typeMap) match {
               case Some(model) => {
                 output += typeRef -> model
-                addRecursive(model, checkedNames, output)
+                addRecursive(cls, model, checkedNames, output)
               }
               case None =>
             }
@@ -120,7 +127,7 @@ object ModelConverters {
     }
   }
 
-  def toName(cls: Class[_]): String = {
+  def toName(cls: ClassWrapper): String = {
     var name: String = null
     val itr = converters.iterator
     while(name == null && itr.hasNext) {
@@ -150,9 +157,9 @@ object ModelConverters {
 }
 
 trait ModelConverter {
-  def read(cls: Class[_], typeMap: Map[String, String]): Option[Model]
-  def toName(cls: Class[_]): String
-  def toDescriptionOpt(cls: Class[_]): Option[String]
+  def read(cls: ClassWrapper, typeMap: Map[String, String]): Option[Model]
+  def toName(cls: ClassWrapper): String
+  def toDescriptionOpt(cls: ClassWrapper): Option[String]
 
   def ignoredPackages: Set[String] = Set("java.lang")
   def ignoredClasses: Set[String] = Set("java.util.Date")

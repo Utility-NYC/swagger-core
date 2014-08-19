@@ -153,6 +153,7 @@ trait JaxrsApiReader extends ClassReader with ClassReaderUtils {
       }
       else(method.getName, List(), List(), List(), List())
     }
+   
     val params = parentParams ++ (for((annotations, paramType, genericParamType) <- (paramAnnotations, paramTypes, genericParamTypes).zipped.toList) yield {
       if(annotations.length > 0) {
         val param = new MutableParameter
@@ -254,7 +255,117 @@ trait JaxrsApiReader extends ClassReader with ClassReaderUtils {
         case _ => ""
       }
     }
+
     readRecursive(docRoot, parentPath.replace("//","/"), cls, config, new ListBuffer[Tuple3[String, String, ListBuffer[Operation]]], new ListBuffer[Method])
+  }
+
+  def readRecursive(
+    docRoot: String, 
+    parentPath: String, cls: Class[_], 
+    config: SwaggerConfig,
+    operations: ListBuffer[Tuple3[String, String, ListBuffer[Operation]]],
+    parentMethods: ListBuffer[Method]): Option[ApiListing] = {
+    val api = cls.getAnnotation(classOf[Api])
+
+    // must have @Api annotation to process!
+    if(api != null) {
+      val consumes = Option(api.consumes) match {
+        case Some(e) if(e != "") => e.split(",").map(_.trim).toList
+        case _ => cls.getAnnotation(classOf[Consumes]) match {
+          case e: Consumes => e.value.toList
+          case _ => List()
+        }
+      }
+      val produces = Option(api.produces) match {
+        case Some(e) if(e != "") => e.split(",").map(_.trim).toList
+        case _ => cls.getAnnotation(classOf[Produces]) match {
+          case e: Produces => e.value.toList
+          case _ => List()
+        }
+      }
+      val protocols = Option(api.protocols) match {
+        case Some(e) if(e != "") => e.split(",").map(_.trim).toList
+        case _ => List()
+      }
+      val description = api.description match {
+        case e: String if(e != "") => Some(e)
+        case _ => None
+      }
+      // look for method-level annotated properties
+      val parentParams: List[Parameter] = (for(field <- getAllFields(cls)) 
+        yield {
+          // only process fields with @ApiParam, @QueryParam, @HeaderParam, @PathParam
+          if(field.getAnnotation(classOf[QueryParam]) != null || field.getAnnotation(classOf[HeaderParam]) != null ||
+            field.getAnnotation(classOf[HeaderParam]) != null || field.getAnnotation(classOf[PathParam]) != null ||
+            field.getAnnotation(classOf[ApiParam]) != null) { 
+            val param = new MutableParameter
+            param.dataType = field.getType.getName
+            Option (field.getAnnotation(classOf[ApiParam])) match {
+              case Some(annotation) => toAllowableValues(annotation.allowableValues)
+              case _ =>
+            }
+            val annotations = field.getAnnotations
+            processParamAnnotations(param, annotations)
+          }
+          else None
+        }
+      ).flatten.toList
+
+      for(method <- cls.getMethods) {
+        val returnType = findSubresourceType(method)
+        val path = method.getAnnotation(classOf[Path]) match {
+          case e: Path => e.value()
+          case _ => ""
+        }
+        val endpoint = (parentPath + /*api.value + */ pathFromMethod(method)).replace("//", "/")
+        Option(returnType.getAnnotation(classOf[Api])) match {
+          case Some(e) => {
+            val root = docRoot + api.value + pathFromMethod(method)
+            parentMethods += method
+            readRecursive(root, endpoint, returnType, config, operations, parentMethods)
+            parentMethods -= method
+          }
+          case _ => {
+            if(method.getAnnotation(classOf[ApiOperation]) != null) {
+              val op = readMethod(method, parentParams, parentMethods)
+              appendOperation(endpoint, path, op, operations)
+            }
+          }
+        }
+      }
+      // sort them by min position in the operations
+      val s = (for(op <- operations) yield {
+        (op, op._3.map(_.position).toList.min)
+      }).sortWith(_._2 < _._2).toList
+      val orderedOperations = new ListBuffer[Tuple3[String, String, ListBuffer[Operation]]]
+      s.foreach(op => {
+        val ops = op._1._3.sortWith(_.position < _.position)
+        orderedOperations += Tuple3(op._1._1, op._1._2, ops)
+      })
+      val apis = (for ((endpoint, resourcePath, operationList) <- orderedOperations) yield {
+        val orderedOperations = new ListBuffer[Operation]
+        operationList.sortWith(_.position < _.position).foreach(e => orderedOperations += e)
+        ApiDescription(
+          addLeadingSlash(endpoint),
+          None,
+          orderedOperations.toList)
+      }).toList
+      val models = ModelUtil.modelsFromApis(apis)
+      Some(ApiListing (
+        apiVersion = config.apiVersion,
+        swaggerVersion = config.swaggerVersion,
+        basePath = config.basePath,
+        resourcePath = addLeadingSlash(api.value),
+        apis = ModelUtil.stripPackages(apis),
+        models = models,
+        description = description,
+        produces = produces,
+        consumes = consumes,
+        protocols = protocols,
+        position = api.position)
+      )
+    }
+    else None
   }
 
   def getAllFields(cls: Class[_]): List[Field] = {
