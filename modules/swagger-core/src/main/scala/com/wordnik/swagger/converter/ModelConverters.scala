@@ -5,7 +5,7 @@ import com.wordnik.swagger.model._
 
 import org.slf4j.LoggerFactory
 
-import scala.collection.mutable.{ ListBuffer, LinkedHashMap, HashSet, HashMap }
+import scala.collection.mutable.{ListBuffer, LinkedHashMap, HashSet, HashMap}
 import com.wordnik.swagger.core.util._
 
 object ModelConverters {
@@ -19,10 +19,10 @@ object ModelConverters {
     new SwaggerSchemaConverter
   )
 
-  def typeMap = SwaggerTypes.primitives ++ (for(c <- converters) yield c.typeMap).flatten.toMap
+  def typeMap = SwaggerTypes.primitives ++ (for (c <- converters) yield c.typeMap).flatten.toMap
 
   def addConverter(c: ModelConverter, first: Boolean = false) = {
-    if(first) {
+    if (first) {
       val reordered = List(c) ++ converters
       converters.clear
       converters ++= reordered
@@ -37,12 +37,12 @@ object ModelConverters {
 
   def read(cls: ClassWrapper, t: Map[String, String] = Map.empty): Option[Model] = {
     val types = {
-      if(t.isEmpty)typeMap
+      if (t.isEmpty) typeMap
       else t
     }
     var model: Option[Model] = None
     val itr = converters.iterator
-    while(model == None && itr.hasNext) {
+    while (model == None && itr.hasNext) {
       itr.next.read(cls, types) match {
         case Some(m) => {
           val filteredProperties = m.properties.filter(prop => skippedClasses.contains(prop._2.qualifiedType) == false)
@@ -54,14 +54,14 @@ object ModelConverters {
     model
   }
 
-  def readAll(cls: Class[_]): List[Model] = {
+  def readAll(cls: ClassWrapper): List[Model] = {
     val output = new HashMap[String, Model]
     var model = read(cls, typeMap)
     val propertyNames = new HashSet[String]
 
     // add subTypes
     model.map(_.subTypes.map(typeRef => {
-      try{
+      try {
         LOGGER.debug("loading subtype " + typeRef)
         val cls = SwaggerContext.loadClass(typeRef)
         read(cls, typeMap) match {
@@ -84,13 +84,13 @@ object ModelConverters {
   }
 
   def addRecursive(modelCls: ClassWrapper, model: Model, checkedNames: HashSet[String], output: HashMap[String, Model]): Unit = {
-    if(!checkedNames.contains(model.name)) {
+    if (!checkedNames.contains(model.name)) {
       val propertyNames = new HashSet[String]
       val typeParams = modelCls.getRawClass.getTypeParameters.map(t => modelCls.getTypeArgument(t.getName))
       for (typeParam <- typeParams) {
         propertyNames += typeParam.getName
       }
-      for((name, property) <- model.properties) {
+      for ((name, property) <- model.properties) {
         val propertyName = property.items match {
           case Some(item) => item.qualifiedType.getOrElse(item.`type`)
           case None => property.qualifiedType
@@ -101,13 +101,13 @@ object ModelConverters {
         }
         propertyNames += name
       }
-      for(typeRef <- propertyNames) {
-        if(ignoredPackages.contains(getPackage(typeRef))) None
-        else if(ignoredClasses.contains(typeRef)) {
+      for (typeRef <- propertyNames) {
+        if (ignoredPackages.contains(getPackage(typeRef))) None
+        else if (ignoredClasses.contains(typeRef)) {
           None
         }
-        else if(!checkedNames.contains(typeRef)) {
-          try{
+        else if (!checkedNames.contains(typeRef)) {
+          try {
             checkedNames += typeRef
             val cls = SwaggerContext.loadClass(typeRef)
             LOGGER.debug("reading class " + cls)
@@ -120,7 +120,7 @@ object ModelConverters {
             }
           }
           catch {
-            case e: ClassNotFoundException => 
+            case e: ClassNotFoundException =>
           }
         }
       }
@@ -130,7 +130,7 @@ object ModelConverters {
   def toName(cls: ClassWrapper): String = {
     var name: String = null
     val itr = converters.iterator
-    while(name == null && itr.hasNext) {
+    while (name == null && itr.hasNext) {
       name = itr.next.toName(cls)
     }
     name
@@ -144,24 +144,27 @@ object ModelConverters {
   }
 
   def ignoredPackages: Set[String] = {
-    (for(converter <- converters) yield converter.ignoredPackages).flatten.toSet
+    (for (converter <- converters) yield converter.ignoredPackages).flatten.toSet
   }
 
   def ignoredClasses: Set[String] = {
-    (for(converter <- converters) yield converter.ignoredClasses).flatten.toSet
+    (for (converter <- converters) yield converter.ignoredClasses).flatten.toSet
   }
 
   def skippedClasses: Set[String] = {
-    (for(converter <- converters) yield converter.skippedClasses).flatten.toSet
+    (for (converter <- converters) yield converter.skippedClasses).flatten.toSet
   }
 }
 
 trait ModelConverter {
   def read(cls: ClassWrapper, typeMap: Map[String, String]): Option[Model]
+
   def toName(cls: ClassWrapper): String
+
   def toDescriptionOpt(cls: ClassWrapper): Option[String]
 
   def ignoredPackages: Set[String] = Set("java.lang")
+
   def ignoredClasses: Set[String] = Set("java.util.Date")
 
   def typeMap = Map[String, String]()

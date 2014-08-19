@@ -1,30 +1,30 @@
 package com.wordnik.swagger.converter
 
 import com.wordnik.swagger.model._
-import com.wordnik.swagger.core.{ SwaggerSpec, SwaggerTypes }
-import com.wordnik.swagger.core.util.TypeUtil
+import com.wordnik.swagger.core.{SwaggerSpec, SwaggerTypes}
+import com.wordnik.swagger.core.util.{ModelUtil, ClassWrapper, TypeUtil}
 import com.wordnik.swagger.annotations.ApiModelProperty
 
-import com.fasterxml.jackson.annotation.{JsonIgnore, JsonProperty}
+import com.fasterxml.jackson.annotation.{JsonIgnoreProperties, JsonIgnore, JsonProperty}
 
 import org.slf4j.LoggerFactory
 
-import sun.reflect.generics.reflectiveObjects.{ ParameterizedTypeImpl, TypeVariableImpl }
+import sun.reflect.generics.reflectiveObjects.{ParameterizedTypeImpl, TypeVariableImpl}
 
-import java.lang.reflect.{ Type, TypeVariable, Field, Modifier, Method, ParameterizedType }
+import java.lang.reflect.{Type, TypeVariable, Field, Modifier, Method, ParameterizedType}
 import java.lang.annotation.Annotation
 import javax.xml.bind.annotation._
 
-import scala.collection.mutable.{ LinkedHashMap, ListBuffer, HashSet, HashMap }
+import scala.collection.mutable.{LinkedHashMap, ListBuffer, HashSet, HashMap}
 import com.wordnik.swagger.reader.{PropertyMetaInfo, ModelReaders}
 
-class ModelPropertyParser(cls: ClassWrapper, t: Map[String, String] = Map.empty) (implicit properties: LinkedHashMap[String, ModelProperty]) {
+class ModelPropertyParser(cls: ClassWrapper, t: Map[String, String] = Map.empty)(implicit properties: LinkedHashMap[String, ModelProperty]) {
   private val LOGGER = LoggerFactory.getLogger(classOf[ModelPropertyParser])
 
   import ModelUtil._
 
   val typeMap = {
-    if(t.isEmpty)
+    if (t.isEmpty)
       SwaggerTypes.primitives
     else t
   }
@@ -36,7 +36,7 @@ class ModelPropertyParser(cls: ClassWrapper, t: Map[String, String] = Map.empty)
   def parse = Option(cls).map(parseRecursive(_))
 
   def parseRecursive(hostClass: ClassWrapper): Unit = {
-    if(!hostClass.isEnum) {
+    if (!hostClass.isEnum) {
       LOGGER.debug("processing class " + hostClass)
 
       val ignoredProperties = parseIgnorePropertiesClassAnnotation(hostClass)
@@ -50,7 +50,7 @@ class ModelPropertyParser(cls: ClassWrapper, t: Map[String, String] = Map.empty)
           if (ignoredProperties.contains(fieldName)) {
             LOGGER.debug("ignoring property " + fieldName)
           } else {
-            parseMethod(hostClass,method)
+            parseMethod(hostClass, method)
           }
         }
       }
@@ -59,7 +59,7 @@ class ModelPropertyParser(cls: ClassWrapper, t: Map[String, String] = Map.empty)
           if (ignoredProperties.contains(field.getName)) {
             LOGGER.debug("ignoring property " + field.getName)
           } else {
-            parseField(hostClass,field)
+            parseField(hostClass, field)
           }
         }
       }
@@ -73,7 +73,7 @@ class ModelPropertyParser(cls: ClassWrapper, t: Map[String, String] = Map.empty)
   def parseField(hostClass: ClassWrapper, field: Field) = {
     LOGGER.debug("processing field " + hostClass + "." + field)
 
-    val propertyMetaInfo = new PropertyMetaInfo(hostClass.getFieldType(field), field.getName, field.getAnnotations)
+    val propertyMetaInfo = new PropertyMetaInfo(hostClass.getFieldType(field), field.getName, field.getAnnotations, field.getGenericType, field.getType)
     val newMetaInfo = ModelReaders.reader.parseField(hostClass, field, propertyMetaInfo)
     parsePropertyAnnotations(newMetaInfo)
   }
@@ -82,7 +82,7 @@ class ModelPropertyParser(cls: ClassWrapper, t: Map[String, String] = Map.empty)
     if (method.getParameterTypes == null || method.getParameterTypes.length == 0) {
       LOGGER.debug("processing method " + method)
 
-      val propertyMetaInfo = new PropertyMetaInfo(hostClass.getMethodReturnType(method), method.getName, method.getAnnotations)
+      val propertyMetaInfo = new PropertyMetaInfo(hostClass.getMethodReturnType(method), method.getName, method.getAnnotations, method.getGenericReturnType, method.getReturnType, false)
       val newMetaInfo = ModelReaders.reader.parseMethod(hostClass, method, propertyMetaInfo)
       parsePropertyAnnotations(newMetaInfo)
     }
@@ -102,14 +102,31 @@ class ModelPropertyParser(cls: ClassWrapper, t: Map[String, String] = Map.empty)
     }
   }
 
-  def parsePropertyAnnotations(metaInfo : PropertyMetaInfo): Any = {
+  def parsePropertyAnnotations(metaInfo: PropertyMetaInfo): Any = {
     if (metaInfo != null) {
-      parsePropertyAnnotations(metaInfo.returnClass, metaInfo.propertyName, metaInfo.propertyAnnotations)
+      parsePropertyAnnotations(metaInfo.returnClass, metaInfo.propertyName, metaInfo.propertyAnnotations, metaInfo.genericType, metaInfo.`type`, metaInfo.isField)
     }
   }
 
-  def parsePropertyAnnotations(returnClass: ClassWrapper, propertyName: String, propertyAnnotations: Array[Annotation]): Any = {
-    val e = extractGetterProperty(propertyName)
+  def parseIgnorePropertiesClassAnnotation(returnClass: ClassWrapper): Array[String] = {
+    var ignoredProperties = Array[String]()
+    val ignore = returnClass.getAnnotation(classOf[JsonIgnoreProperties])
+
+    if (ignore != null) {
+      ignoredProperties = ignore.value
+
+      LOGGER.debug("found @JsonIgnoreProperties on " + returnClass + " with value(s) " + ignoredProperties.mkString(","))
+    }
+
+    ignoredProperties
+  }
+
+
+  def parsePropertyAnnotations(returnClass: ClassWrapper, propertyName: String, propertyAnnotations: Array[Annotation], genericReturnType: Type, returnType: Type, isField: Boolean): Any = {
+    val e = isField match {
+      case true => (propertyName, false)
+      case false => extractGetterProperty(propertyName)
+    }
     var originalName = e._1
     var isGetter = e._2
     var overrideDataType: String = null
@@ -119,7 +136,7 @@ class ModelPropertyParser(cls: ClassWrapper, t: Map[String, String] = Map.empty)
     var hasAccessorNoneAnnotation = false
 
     var processedAnnotations = processAnnotations(originalName, propertyAnnotations)
-    if(processedAnnotations.contains("paramType") && processedAnnotations("paramType") != null)
+    if (processedAnnotations.contains("paramType") && processedAnnotations("paramType") != null)
       overrideDataType = processedAnnotations("paramType").toString
 
     var name = processedAnnotations("name").asInstanceOf[String]
@@ -129,7 +146,7 @@ class ModelPropertyParser(cls: ClassWrapper, t: Map[String, String] = Map.empty)
     var position = processedAnnotations("position").asInstanceOf[Int]
 
     var description = {
-      if(processedAnnotations.contains("description") && processedAnnotations("description") != null)
+      if (processedAnnotations.contains("description") && processedAnnotations("description") != null)
         Some(processedAnnotations("description").asInstanceOf[String])
       else None
     }
@@ -137,8 +154,8 @@ class ModelPropertyParser(cls: ClassWrapper, t: Map[String, String] = Map.empty)
     var isXmlElement = processedAnnotations("isXmlElement").asInstanceOf[Boolean]
     val isDocumented = processedAnnotations("isDocumented").asInstanceOf[Boolean]
     var allowableValues = {
-      if(returnClass.isEnum) 
-        Some(AllowableListValues((for(v <- returnClass.getEnumConstants) yield v.toString).toList))
+      if (returnClass.isEnum)
+        Some(AllowableListValues((for (v <- returnClass.getEnumConstants) yield v.toString).toList))
       else
         processedAnnotations("allowableValues").asInstanceOf[Option[AllowableValues]]
     }
@@ -154,15 +171,15 @@ class ModelPropertyParser(cls: ClassWrapper, t: Map[String, String] = Map.empty)
         name = propAnnoOutput("name").asInstanceOf[String]
       }
 
-      if(propAnnoOutput.contains("paramType") && propAnnoOutput("paramType") != null)
+      if (propAnnoOutput.contains("paramType") && propAnnoOutput("paramType") != null)
         overrideDataType = propAnnoOutput("paramType").toString
 
-      if(allowableValues == None)
+      if (allowableValues == None)
         allowableValues = propAnnoOutput("allowableValues").asInstanceOf[Option[AllowableValues]]
-      if(description == None && propAnnoOutput.contains("description") && propAnnoOutput("description") != null)
+      if (description == None && propAnnoOutput.contains("description") && propAnnoOutput("description") != null)
         description = Some(propAnnoOutput("description").asInstanceOf[String])
-      if(propPosition != 0) position = propAnnoOutput("position").asInstanceOf[Int]
-      if(required == false) required = propAnnoOutput("required").asInstanceOf[Boolean]
+      if (propPosition != 0) position = propAnnoOutput("position").asInstanceOf[Int]
+      if (required == false) required = propAnnoOutput("required").asInstanceOf[Boolean]
       isFieldExists = true
       if (!isTransient) isTransient = propAnnoOutput("isTransient").asInstanceOf[Boolean]
       if (!isXmlElement) isXmlElement = propAnnoOutput("isXmlElement").asInstanceOf[Boolean]
@@ -189,7 +206,7 @@ class ModelPropertyParser(cls: ClassWrapper, t: Map[String, String] = Map.empty)
         case _ => getDataType(genericReturnType, returnType, true)
       }
       if (!"void".equals(paramType) && null != paramType && !processedFields.contains(name)) {
-        if(!excludedFieldTypes.contains(paramType)) {
+        if (!excludedFieldTypes.contains(paramType)) {
           val items = {
             val ComplexTypeMatcher = "([a-zA-Z]*)\\[([a-zA-Z\\.\\-0-9_]*)\\].*".r
             paramType match {
@@ -198,12 +215,12 @@ class ModelPropertyParser(cls: ClassWrapper, t: Map[String, String] = Map.empty)
                 paramType = containerType
                 val ComplexTypeMatcher(t, simpleTypeRef) = simpleName
                 val typeRef = {
-                  if(simpleTypeRef.indexOf(",") > 0) // it's a map, use the value only
+                  if (simpleTypeRef.indexOf(",") > 0) // it's a map, use the value only
                     simpleTypeRef.split(",").last
                   else simpleTypeRef
                 }
                 simpleName = containerType
-                if(isComplex(simpleTypeRef)) {
+                if (isComplex(simpleTypeRef)) {
                   Some(ModelRef(null, Some(simpleTypeRef), Some(basePart)))
                 }
                 else Some(ModelRef(simpleTypeRef, None, Some(basePart)))
@@ -211,15 +228,14 @@ class ModelPropertyParser(cls: ClassWrapper, t: Map[String, String] = Map.empty)
               case _ => None
             }
           }
-          val param = ModelProperty(
+          val param = ModelReaders.reader.processModelProperty(ModelProperty(
             validateDatatype(simpleName),
             paramType,
             position,
             required,
             description,
             allowableValues.getOrElse(AnyAllowableValues),
-            items)
-          param = ModelReaders.reader.processModelProperty(param, returnClass, propertyAnnotations, fieldAnnotations)
+            items), returnClass, propertyAnnotations, fieldAnnotations)
           LOGGER.debug("added param type " + paramType + " for field " + name)
           properties += name -> param
         }
@@ -269,8 +285,8 @@ class ModelPropertyParser(cls: ClassWrapper, t: Map[String, String] = Map.empty)
           description = readString(e.value)
           notes = readString(e.notes)
           paramType = readString(e.dataType)
-          if(e.required) required = true
-          if(e.position != 0) position = e.position
+          if (e.required) required = true
+          if (e.position != 0) position = e.position
           isDocumented = true
           allowableValues = Some(toAllowableValues(e.allowableValues))
           paramAccess = readString(e.access)
@@ -279,7 +295,7 @@ class ModelPropertyParser(cls: ClassWrapper, t: Map[String, String] = Map.empty)
         case e: XmlAttribute => {
           updatedName = readString(e.name, name, "##default")
           updatedName = readString(name, name)
-          if(e.required) required = true
+          if (e.required) required = true
           isXmlElement = true
         }
         case e: XmlElement => {
@@ -302,7 +318,7 @@ class ModelPropertyParser(cls: ClassWrapper, t: Map[String, String] = Map.empty)
           updatedName = readString(e.value, name)
           isJsonProperty = true
         }
-        case _ => 
+        case _ =>
       }
     }
     val output = new HashMap[String, Any]
@@ -338,7 +354,7 @@ class ModelPropertyParser(cls: ClassWrapper, t: Map[String, String] = Map.empty)
     else s.trim
   }
 
-  def getDeclaredField(inputClass: Class[_], fieldName: String): Field = {
+  def getDeclaredField(inputClass: ClassWrapper, fieldName: String): Field = {
     try {
       inputClass.getDeclaredField(fieldName)
     } catch {
@@ -376,13 +392,13 @@ class ModelPropertyParser(cls: ClassWrapper, t: Map[String, String] = Map.empty)
     }
     else {
       val min = ranges(0) match {
-        case e: String if(e == positiveInfinity) => Float.PositiveInfinity
-        case e: String if(e == negativeInfinity) => Float.NegativeInfinity
+        case e: String if (e == positiveInfinity) => Float.PositiveInfinity
+        case e: String if (e == negativeInfinity) => Float.NegativeInfinity
         case e: String => e.toFloat
       }
       val max = ranges(1) match {
-        case e: String if(e == positiveInfinity) => Float.PositiveInfinity
-        case e: String if(e == negativeInfinity) => Float.NegativeInfinity
+        case e: String if (e == positiveInfinity) => Float.PositiveInfinity
+        case e: String if (e == negativeInfinity) => Float.NegativeInfinity
         case e: String => e.toFloat
       }
       AllowableRangeValues(min.toString, max.toString)
@@ -415,9 +431,9 @@ class ModelPropertyParser(cls: ClassWrapper, t: Map[String, String] = Map.empty)
         genericReturnType.asInstanceOf[TypeVariableImpl[_]].getName
       }
       else if (!genericReturnType.getClass.isAssignableFrom(classOf[ParameterizedTypeImpl])) {
-        if(genericReturnType.isInstanceOf[Class[_]])
+        if (genericReturnType.isInstanceOf[Class[_]])
           readName(genericReturnType.asInstanceOf[Class[_]], isSimple)
-        else{
+        else {
           LOGGER.debug("can't get type info for " + genericReturnType.toString)
           genericReturnType.toString
         }
