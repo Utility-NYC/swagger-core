@@ -42,7 +42,7 @@ class PlayApiScanner(routes: Option[Routes]) extends Scanner {
         }
       } =>
         Logger("swagger").info("Found API controller:  %s".format(className))
-        SwaggerContext.loadClass(className)
+        SwaggerContext.loadClass(className).getRawType.asInstanceOf[Class[_]]
     }
 
   }

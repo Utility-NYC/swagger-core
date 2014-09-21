@@ -9,8 +9,6 @@ case class PropertyMetaInfo(
                              returnClass: ClassWrapper,
                              propertyName: String,
                              propertyAnnotations: Array[Annotation],
-                             genericType: Type,
-                             `type`: Type,
                              isField: Boolean = false
                              )
 

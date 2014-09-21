@@ -31,8 +31,8 @@ trait JaxrsApiReader extends ClassReader with ClassReaderUtils {
   def findSubresourceType(method: Method): Class[_]
 
   def readRecursive(
-    docRoot: String, 
-    parentPath: String, cls: Class[_], 
+    docRoot: String,
+    parentPath: String, cls: Class[_],
     config: SwaggerConfig,
     operations: ListBuffer[Tuple3[String, String, ListBuffer[Operation]]],
     parentMethods: ListBuffer[Method]): Option[ApiListing]
@@ -259,7 +259,7 @@ trait JaxrsApiReader extends ClassReader with ClassReaderUtils {
     readRecursive(docRoot, parentPath.replace("//","/"), cls, config, new ListBuffer[Tuple3[String, String, ListBuffer[Operation]]], new ListBuffer[Method])
   }
 
-  def readRecursive(
+ /* def readRecursive(
     docRoot: String, 
     parentPath: String, cls: Class[_], 
     config: SwaggerConfig,
@@ -367,6 +367,7 @@ trait JaxrsApiReader extends ClassReader with ClassReaderUtils {
     }
     else None
   }
+  */
 
   def getAllFields(cls: Class[_]): List[Field] = {
     var fields = cls.getDeclaredFields().toList;                 

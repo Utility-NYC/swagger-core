@@ -32,7 +32,8 @@ trait SwaggerSpecFilter {
 }
 
 class SpecFilter {
-  val ContainerMatcher = "(List|Array|Set|Map)\\[(.*)\\].*?".r
+ // val ContainerMatcher = "(List|Array|Set|Map)\\[(.*)\\].*?".r
+    val ContainerMatcher = "(List|Array|Set)\\[(.*)\\].*?".r
   private val LOGGER = LoggerFactory.getLogger(classOf[SpecFilter])
 
   def filter(listing: ApiListing, filter: SwaggerSpecFilter, params: Map[String, List[String]], cookies: Map[String, String], headers: Map[String, List[String]]) = {
@@ -118,7 +119,7 @@ class SpecFilter {
   def requiredProperties(models: List[String], allModels: Map[String, Model], inspectedTypes: HashSet[String]): List[String] = {
     val mapModel = (model: String) => {
       model match {
-        case ContainerMatcher(container, basePart) => {
+        case ContainerMatcher( basePart) => {
           if(basePart.indexOf(",") > 0) // it's a map, use the value only
             basePart.split(",")(1)
           else basePart
